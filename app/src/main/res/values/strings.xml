@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Default (Spanish) — see values-en for English. UI copy is driven mostly from
+     the in-app language toggle (Strings.kt); these are launcher/system strings. -->
+<resources>
+    <string name="app_name">ArchivoSync</string>
+    <string name="backup_notification_channel">Respaldos</string>
+    <string name="backup_notification_channel_desc">Progreso de subidas y respaldos en segundo plano</string>
+</resources>

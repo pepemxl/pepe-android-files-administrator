@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose drives the real theme (ui/theme). This base theme only configures
+         the splash window: light status bar, app background. -->
+    <style name="Theme.ArchivoSync" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@color/brand_primary</item>
+        <item name="android:windowBackground">@color/app_background</item>
+    </style>
+</resources>

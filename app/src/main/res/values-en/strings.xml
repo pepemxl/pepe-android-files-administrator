@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ArchivoSync</string>
+    <string name="backup_notification_channel">Backups</string>
+    <string name="backup_notification_channel_desc">Background upload and backup progress</string>
+</resources>
