@@ -3,10 +3,12 @@
 /local.properties
 /.idea/
 .DS_Store
-/build
 /captures
 .externalNativeBuild
 .cxx
 local.properties
 *.keystore
 !debug.keystore
+
+gradle\wrapper\gradle-wrapper.jar
+build
