@@ -1,7 +1,13 @@
 package com.pepe.archivosync.ui.screens.p2p
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.net.Uri
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onRoot
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -22,10 +28,10 @@ import com.pepe.archivosync.domain.model.P2pTransfer
 import com.pepe.archivosync.domain.model.SignalingState
 import com.pepe.archivosync.domain.repository.P2pConnectivityRepository
 import com.pepe.archivosync.domain.repository.SettingsRepository
+import com.pepe.archivosync.ui.theme.ArchivoSyncTheme
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
@@ -49,6 +55,7 @@ import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.webrtc.PeerConnectionFactory
@@ -56,29 +63,30 @@ import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import java.io.ByteArrayInputStream
 import java.io.File
+import java.io.FileOutputStream
 import java.util.Base64
 import java.util.concurrent.TimeUnit
 import kotlin.random.Random
 
 /**
- * Dashboard end-to-end with two linked devices, verified at the UI-state layer.
+ * Dashboard end-to-end with two linked devices. Device A is the production stack
+ * — [P2pConnectivityRepositoryImpl] + [P2pRepositoryImpl] + the real
+ * [P2pViewModel] — device B a second in-process peer, both linked through the
+ * LIVE orchestrator. A real file moves A→B (a completed SEED) and B→A (a LEECH).
  *
- * Device A is the production stack — [P2pConnectivityRepositoryImpl] +
- * [P2pRepositoryImpl] (the BitTorrent-style dashboard source) + the real
- * [P2pViewModel] whose `state` is exactly what [P2pScreen] renders. Device B is
- * a second in-process peer. Both link through the LIVE orchestrator; a real file
- * moves A→B (must surface as a completed SEED) and B→A (a completed LEECH), and
- * we assert the ViewModel's [P2pUiState] reflects both plus the peer count.
+ *  - [dashboardReflectsRealSeedAndLeech] asserts the ViewModel's [P2pUiState]
+ *    (portable across API levels).
+ *  - [dashboardScreenRendersSeedAndLeech] renders the actual [P2pScreen] Compose
+ *    UI, waits for the transfer cards to appear on screen and saves a screenshot
+ *    (needs API ≤ 34: Compose's Espresso sync throws on API 36's InputManager).
  *
- * (Rendering the Composable itself is skipped: the only available emulators are
- * API 36, where Espresso's InputManager sync — which Compose's test clock drives —
- * throws NoSuchMethodException. The ViewModel state is the screen's sole data
- * source, so asserting it verifies the dashboard the UI shows.)
- *
- * Prereqs and skipping are identical to WebRtcDataChannelInstrumentedTest.
+ * Prereqs/skip are identical to WebRtcDataChannelInstrumentedTest.
  */
 @RunWith(AndroidJUnit4::class)
 class P2pDashboardUiTest {
+
+    @get:Rule
+    val compose = createComposeRule()
 
     private val context: Context = ApplicationProvider.getApplicationContext()
     private val args get() = InstrumentationRegistry.getArguments()
@@ -100,6 +108,7 @@ class P2pDashboardUiTest {
     }
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private lateinit var factory: PeerConnectionFactory
+    private var cleanup: (() -> Unit)? = null
 
     @Before
     fun setUp() {
@@ -115,19 +124,21 @@ class P2pDashboardUiTest {
 
     @After
     fun tearDown() {
+        runCatching { cleanup?.invoke() }
         appScope.cancel()
         if (::factory.isInitialized) runCatching { factory.dispose() }
     }
 
-    @Test
-    fun dashboardReflectsRealSeedAndLeechWithTwoLinkedDevices() = runBlocking<Unit> {
-        val stamp = System.currentTimeMillis()
-        val seedName = "seed-$stamp.bin"
-        val leechName = "leech-$stamp.bin"
-        val payloadA = Random(7).nextBytes(400 * 1024)
-        val payloadB = Random(9).nextBytes(300 * 1024)
+    /** A linked A↔B pair, with A being the real dashboard stack. */
+    private class Fixture(
+        val viewModel: P2pViewModel,
+        val connectivityA: P2pConnectivityRepository,
+        val webrtcB: WebRtcSessionManager,
+        val idA: String,
+        val idB: String,
+    )
 
-        // device A = the real dashboard stack; device B = raw peer
+    private suspend fun linkTwoDevices(): Fixture {
         val settingsA = FakeSettings(
             AppSettings(orchestratorUrl = orchUrl, signalingUrl = wsUrl, token = "", deviceName = "dash-A")
         )
@@ -135,54 +146,89 @@ class P2pDashboardUiTest {
         val webrtcA = WebRtcSessionManager(context, factory, signalingA, json)
         val connectivityA = P2pConnectivityRepositoryImpl(context, api, signalingA, webrtcA, settingsA, appScope)
         val dashboardA = P2pRepositoryImpl(connectivityA, appScope)
-        val viewModelA = P2pViewModel(dashboardA, connectivityA, settingsA)
+        val viewModel = P2pViewModel(dashboardA, connectivityA, settingsA)
 
         val signalingB = SignalingClient(http, codec)
         val webrtcB = WebRtcSessionManager(context, factory, signalingB, json)
 
-        var stateJob: Job? = null
-        try {
-            val token = login()
-            settingsA.set { it.copy(token = token) }
-            val idB = registerDevice(token, "dash-B")
-            webrtcB.setIceServers(fetchIceServers(token))
-            val welcomeB = wire(signalingB, webrtcB)
+        val token = login()
+        settingsA.set { it.copy(token = token) }
+        val idB = registerDevice(token, "dash-B")
+        webrtcB.setIceServers(fetchIceServers(token))
+        val welcomeB = wire(signalingB, webrtcB)
 
-            connectivityA.connect().getOrThrow()
-            withTimeout(15_000) { connectivityA.signalingState.first { it == SignalingState.CONNECTED } }
-            val idA = settingsA.settings.first().deviceId
-            require(idA.isNotBlank()) { "device A did not register" }
+        connectivityA.connect().getOrThrow()
+        withTimeout(15_000) { connectivityA.signalingState.first { it == SignalingState.CONNECTED } }
+        val idA = settingsA.settings.first().deviceId
+        require(idA.isNotBlank()) { "device A did not register" }
 
-            signalingB.connect(wsUrl, token, idB)
-            withTimeout(15_000) { welcomeB.await() }
+        signalingB.connect(wsUrl, token, idB)
+        withTimeout(15_000) { welcomeB.await() }
 
-            connectivityA.connectToPeer(idB).getOrThrow()
-            awaitChannelOpen(connectivityA, idB, 60_000)
+        connectivityA.connectToPeer(idB).getOrThrow()
+        awaitChannelOpen(connectivityA, idB, 60_000)
 
-            // Activate the ViewModel's UI-state (SharingStarted.WhileSubscribed).
-            stateJob = appScope.launch { viewModelA.state.collect {} }
+        cleanup = { connectivityA.disconnect(); signalingB.close(); webrtcB.closeAll() }
+        return Fixture(viewModel, connectivityA, webrtcB, idA, idB)
+    }
 
-            // A → B : must surface as a completed SEED on the dashboard.
-            val fileA = File(context.cacheDir, seedName).apply { writeBytes(payloadA) }
-            connectivityA.sendFile(idB, Uri.fromFile(fileA)).getOrThrow()
-            awaitUiTransfer(viewModelA, 30_000) {
-                it.name == seedName && it.mode == P2pMode.SEED && it.progress == 100 && it.status == P2pStatus.DONE
-            }
+    @Test
+    fun dashboardReflectsRealSeedAndLeech() = runBlocking<Unit> {
+        val seedName = "seed-${System.currentTimeMillis()}.bin"
+        val leechName = "leech-${System.currentTimeMillis()}.bin"
+        val f = linkTwoDevices()
+        val stateJob = appScope.launch { f.viewModel.state.collect {} }
 
-            // B → A : must surface as a completed LEECH on the dashboard.
-            webrtcB.sendFile(idA, leechName, payloadB.size.toLong(), ByteArrayInputStream(payloadB))
-            awaitUiTransfer(viewModelA, 30_000) {
-                it.name == leechName && it.mode == P2pMode.LEECH && it.progress == 100 && it.status == P2pStatus.DONE
-            }
-
-            assertTrue("dashboard peer count must reflect the open link", viewModelA.state.value.stats.peers >= 1)
-            fileA.delete()
-        } finally {
-            stateJob?.cancel()
-            connectivityA.disconnect()
-            signalingB.close()
-            webrtcB.closeAll()
+        sendSeed(f, seedName)
+        awaitUiTransfer(f.viewModel, 30_000) {
+            it.name == seedName && it.mode == P2pMode.SEED && it.progress == 100 && it.status == P2pStatus.DONE
         }
+        sendLeech(f, leechName)
+        awaitUiTransfer(f.viewModel, 30_000) {
+            it.name == leechName && it.mode == P2pMode.LEECH && it.progress == 100 && it.status == P2pStatus.DONE
+        }
+        assertTrue("peer count must reflect the open link", f.viewModel.state.value.stats.peers >= 1)
+        stateJob.cancel()
+    }
+
+    @Test
+    fun dashboardScreenRendersSeedAndLeech() {
+        val seedName = "seed-${System.currentTimeMillis()}.bin"
+        val leechName = "leech-${System.currentTimeMillis()}.bin"
+
+        val f = runBlocking { linkTwoDevices() }
+
+        // Render the real dashboard screen bound to the real ViewModel.
+        compose.setContent { ArchivoSyncTheme { P2pScreen(f.viewModel) } }
+
+        runBlocking { sendSeed(f, seedName) }
+        compose.waitUntil(30_000) {
+            compose.onAllNodesWithText(seedName, substring = true).fetchSemanticsNodes().isNotEmpty()
+        }
+
+        runBlocking { sendLeech(f, leechName) }
+        compose.waitUntil(30_000) {
+            compose.onAllNodesWithText(leechName, substring = true).fetchSemanticsNodes().isNotEmpty()
+        }
+
+        // Prove pixels were rendered: capture the screen to a PNG.
+        val bitmap = compose.onRoot().captureToImage().asAndroidBitmap()
+        assertTrue("screen must render with real pixels", bitmap.width > 0 && bitmap.height > 0)
+        val shot = File(context.filesDir, "p2p_dashboard.png")
+        FileOutputStream(shot).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        println("P2P dashboard screenshot saved to ${shot.absolutePath} (${bitmap.width}x${bitmap.height})")
+    }
+
+    // --- transfer triggers -------------------------------------------------
+
+    private suspend fun sendSeed(f: Fixture, name: String) {
+        val file = File(context.cacheDir, name).apply { writeBytes(Random(7).nextBytes(400 * 1024)) }
+        f.connectivityA.sendFile(f.idB, Uri.fromFile(file)).getOrThrow()
+    }
+
+    private suspend fun sendLeech(f: Fixture, name: String) {
+        val payload = Random(9).nextBytes(300 * 1024)
+        f.webrtcB.sendFile(f.idA, name, payload.size.toLong(), ByteArrayInputStream(payload))
     }
 
     // --- helpers -----------------------------------------------------------
