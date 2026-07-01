@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Debug-only overlay. Enables cleartext HTTP/WS so the P2P instrumented test
+    (WebRtcDataChannelInstrumentedTest) can reach the local integration stack
+    over http://10.0.2.2 / ws://10.0.2.2. Release builds are unaffected and keep
+    rejecting plaintext by design.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application
+        android:usesCleartextTraffic="true"
+        tools:ignore="UnusedAttribute" />
+</manifest>
