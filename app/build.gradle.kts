@@ -107,6 +107,10 @@ dependencies {
     // WebRTC (P2P DataChannel transport via the orchestrator's signaling)
     implementation(libs.stream.webrtc.android)
 
+    // Cloud transports: FTP (commons-net) + SFTP (sshj); S3/GCS/WebDAV reuse OkHttp
+    implementation(libs.commons.net)
+    implementation(libs.sshj)
+
     // Test
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

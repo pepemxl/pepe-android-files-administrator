@@ -30,24 +30,31 @@ class BackupNotifier @Inject constructor(
         }
     }
 
-    fun foregroundInfo(title: String, content: String, progress: Int): ForegroundInfo {
+    fun foregroundInfo(title: String, content: String, progress: Int): ForegroundInfo =
+        build(NOTIF_ID, title, content, progress, android.R.drawable.stat_sys_upload)
+
+    fun downloadForegroundInfo(title: String, content: String, progress: Int): ForegroundInfo =
+        build(NOTIF_ID_DOWNLOAD, title, content, progress, android.R.drawable.stat_sys_download)
+
+    private fun build(notifId: Int, title: String, content: String, progress: Int, icon: Int): ForegroundInfo {
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(content)
-            .setSmallIcon(android.R.drawable.stat_sys_upload)
+            .setSmallIcon(icon)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setProgress(100, progress, progress <= 0)
             .build()
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            ForegroundInfo(NOTIF_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            ForegroundInfo(notifId, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         } else {
-            ForegroundInfo(NOTIF_ID, notification)
+            ForegroundInfo(notifId, notification)
         }
     }
 
     companion object {
         const val CHANNEL_ID = "backup_progress"
         const val NOTIF_ID = 1001
+        const val NOTIF_ID_DOWNLOAD = 1002
     }
 }

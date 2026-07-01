@@ -64,6 +64,7 @@ data class DownloadEntity(
     val status: String,
     val progress: Int,
     val remotePath: String?,
+    val localPath: String? = null,
 )
 
 fun DownloadEntity.toDomain() = DownloadItem(
@@ -74,6 +75,7 @@ fun DownloadEntity.toDomain() = DownloadItem(
     status = runCatching { DownloadStatus.valueOf(status) }.getOrDefault(DownloadStatus.AVAILABLE),
     progress = progress,
     remotePath = remotePath,
+    localPath = localPath,
 )
 
 fun DownloadItem.toEntity() = DownloadEntity(
@@ -84,4 +86,5 @@ fun DownloadItem.toEntity() = DownloadEntity(
     status = status.name,
     progress = progress,
     remotePath = remotePath,
+    localPath = localPath,
 )

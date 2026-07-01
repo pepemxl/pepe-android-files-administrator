@@ -23,11 +23,14 @@ data class AppSettings(
     val uploadEndpoint: String = "/upload",
     val token: String = "",
 
-    // Cloud destination
+    // Cloud destination. `host`: S3/GCS bucket · WebDAV base URL · FTP/SFTP host[:port]
+    // (sftp:// scheme selects SFTP). `accessKey`/`secretKey`: keys or user/password.
     val cloudProvider: CloudProvider = CloudProvider.S3,
-    val host: String = "mi-bucket.s3.amazonaws.com",
+    val host: String = "mi-bucket",
     val accessKey: String = "",
     val secretKey: String = "",
+    val region: String = "us-east-1",   // S3/GCS signing region
+    val cloudPath: String = "",          // key prefix / remote directory
 
     // P2P (WebRTC via the orchestrator: pepe-p2p-orquestrator)
     val p2pEnabled: Boolean = true,

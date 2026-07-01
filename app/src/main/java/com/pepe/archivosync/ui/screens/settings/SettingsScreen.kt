@@ -92,6 +92,10 @@ fun SettingsScreen(appViewModel: AppViewModel) {
                         Field(s.setHost, settings.host) { v -> appViewModel.update { it.copy(host = v) } }
                         Field(s.setAccessKey, settings.accessKey) { v -> appViewModel.update { it.copy(accessKey = v) } }
                         Field(s.setSecretKey, settings.secretKey) { v -> appViewModel.update { it.copy(secretKey = v) } }
+                        if (settings.cloudProvider == CloudProvider.S3 || settings.cloudProvider == CloudProvider.GCS) {
+                            Field(s.setRegion, settings.region) { v -> appViewModel.update { it.copy(region = v) } }
+                        }
+                        Field(s.setCloudPath, settings.cloudPath) { v -> appViewModel.update { it.copy(cloudPath = v) } }
                     }
 
                     Surface(

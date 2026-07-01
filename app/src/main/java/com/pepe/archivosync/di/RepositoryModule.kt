@@ -8,12 +8,14 @@ import com.pepe.archivosync.data.settings.SettingsRepositoryImpl
 import com.pepe.archivosync.data.source.SafSourceRepository
 import com.pepe.archivosync.domain.repository.BackupScheduler
 import com.pepe.archivosync.domain.repository.DestinationResolver
+import com.pepe.archivosync.domain.repository.DownloadScheduler
 import com.pepe.archivosync.domain.repository.P2pConnectivityRepository
 import com.pepe.archivosync.domain.repository.P2pRepository
 import com.pepe.archivosync.domain.repository.SettingsRepository
 import com.pepe.archivosync.domain.repository.SourceRepository
 import com.pepe.archivosync.domain.repository.TransferRepository
 import com.pepe.archivosync.work.BackupSchedulerImpl
+import com.pepe.archivosync.work.DownloadSchedulerImpl
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -51,4 +53,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindBackupScheduler(impl: BackupSchedulerImpl): BackupScheduler
+
+    @Binds
+    @Singleton
+    abstract fun bindDownloadScheduler(impl: DownloadSchedulerImpl): DownloadScheduler
 }

@@ -4,6 +4,7 @@ import com.pepe.archivosync.domain.model.AppSettings
 import com.pepe.archivosync.domain.model.DownloadItem
 import com.pepe.archivosync.domain.model.TransferChannel
 import java.io.InputStream
+import java.io.OutputStream
 
 /** Outcome of a connectivity probe against a remote. */
 sealed interface ConnectionResult {
@@ -36,6 +37,17 @@ interface DestinationProvider {
 
     /** Lists files available on the remote for the Downloads screen. */
     suspend fun list(settings: AppSettings): Result<List<DownloadItem>>
+
+    /**
+     * Streams [item] from the remote into [sink] (the caller owns and closes it),
+     * reporting cumulative bytes read via [onProgress] for checkpointing.
+     */
+    suspend fun download(
+        settings: AppSettings,
+        item: DownloadItem,
+        sink: OutputStream,
+        onProgress: (bytesRead: Long) -> Unit,
+    ): Result<Unit>
 }
 
 /** Resolves the active [DestinationProvider] for the current settings. */

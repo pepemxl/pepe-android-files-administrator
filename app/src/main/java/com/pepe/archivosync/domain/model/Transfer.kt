@@ -37,4 +37,6 @@ data class DownloadItem(
     val status: DownloadStatus,
     val progress: Int,            // 0..100
     val remotePath: String? = null,
+    /** Absolute path where the file was saved once DOWNLOADED. */
+    val localPath: String? = null,
 )

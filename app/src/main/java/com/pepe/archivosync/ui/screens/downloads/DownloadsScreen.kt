@@ -15,10 +15,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,7 +51,11 @@ fun DownloadsScreen(
     val accent = LocalAccent.current
     val s = LocalStrings.current
     val items by viewModel.items.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val settings by appViewModel.settings.collectAsStateWithLifecycle()
+
+    // Pull the real remote listing when the screen opens.
+    LaunchedEffect(Unit) { viewModel.refresh() }
 
     LazyColumn(
         Modifier.fillMaxWidth().padding(12.dp),
@@ -60,9 +67,17 @@ fun DownloadsScreen(
                     Surface(color = accent.copy(alpha = 0.11f), shape = RoundedCornerShape(9.dp), modifier = Modifier.size(36.dp)) {
                         Box(contentAlignment = Alignment.Center) { Icon(Icons.Filled.Cloud, null, tint = accent, modifier = Modifier.size(20.dp)) }
                     }
-                    Column(Modifier.padding(start = 10.dp)) {
+                    Column(Modifier.padding(start = 10.dp).weight(1f)) {
                         Text(s.dlRemoteAt.uppercase(), color = AppColors.OnSurfaceVariant, fontSize = 11.sp, fontWeight = FontWeight.Medium)
                         Text(settings.remoteLabel, fontFamily = MonoFamily, fontSize = 13.sp, maxLines = 1)
+                    }
+                    if (refreshing) {
+                        CircularProgressIndicator(color = accent, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+                    } else {
+                        Icon(
+                            Icons.Filled.Refresh, s.dlRefresh, tint = accent,
+                            modifier = Modifier.size(22.dp).clickable { viewModel.refresh() },
+                        )
                     }
                 }
             }
@@ -104,6 +119,16 @@ private fun DownloadCard(item: DownloadItem, accent: Color, onDownload: () -> Un
                     ThinProgressBar(item.progress, accent, Modifier.weight(1f))
                     Text(Formatters.percent(item.progress), color = AppColors.OnSurfaceVariant, fontFamily = MonoFamily, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 10.dp))
                 }
+            }
+            if (item.status == DownloadStatus.DOWNLOADED && item.localPath != null) {
+                Text(
+                    "${s.dlSavedTo}: ${item.localPath}",
+                    color = AppColors.OnSurfaceFaint,
+                    fontFamily = MonoFamily,
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
             }
         }
     }

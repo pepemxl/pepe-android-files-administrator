@@ -33,6 +33,8 @@ class SettingsRepositoryImpl @Inject constructor(
         val host = stringPreferencesKey("host")
         val accessKey = stringPreferencesKey("access_key")
         val secretKey = stringPreferencesKey("secret_key")
+        val region = stringPreferencesKey("region")
+        val cloudPath = stringPreferencesKey("cloud_path")
         val p2pEnabled = booleanPreferencesKey("p2p_enabled")
         val orchestratorUrl = stringPreferencesKey("orchestrator_url")
         val signalingUrl = stringPreferencesKey("signaling_url")
@@ -61,6 +63,8 @@ class SettingsRepositoryImpl @Inject constructor(
             p[Keys.host] = next.host
             p[Keys.accessKey] = next.accessKey
             p[Keys.secretKey] = next.secretKey
+            p[Keys.region] = next.region
+            p[Keys.cloudPath] = next.cloudPath
             p[Keys.p2pEnabled] = next.p2pEnabled
             p[Keys.orchestratorUrl] = next.orchestratorUrl
             p[Keys.signalingUrl] = next.signalingUrl
@@ -90,6 +94,8 @@ class SettingsRepositoryImpl @Inject constructor(
             host = this[Keys.host] ?: defaults.host,
             accessKey = this[Keys.accessKey] ?: defaults.accessKey,
             secretKey = this[Keys.secretKey] ?: defaults.secretKey,
+            region = this[Keys.region] ?: defaults.region,
+            cloudPath = this[Keys.cloudPath] ?: defaults.cloudPath,
             p2pEnabled = this[Keys.p2pEnabled] ?: defaults.p2pEnabled,
             orchestratorUrl = this[Keys.orchestratorUrl] ?: defaults.orchestratorUrl,
             signalingUrl = this[Keys.signalingUrl] ?: defaults.signalingUrl,

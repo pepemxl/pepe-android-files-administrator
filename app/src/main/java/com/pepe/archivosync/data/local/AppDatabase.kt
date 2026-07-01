@@ -5,7 +5,7 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [TransferEntity::class, DownloadEntity::class],
-    version = 1,
+    version = 2, // v2: downloads.localPath
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {

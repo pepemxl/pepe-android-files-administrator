@@ -1,5 +1,6 @@
 package com.pepe.archivosync.data
 
+import com.pepe.archivosync.BuildConfig
 import com.pepe.archivosync.data.local.TransferDao
 import com.pepe.archivosync.data.local.toEntity
 import com.pepe.archivosync.domain.model.DownloadItem
@@ -12,15 +13,21 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Seeds the local DB with representative records on first launch so the
- * Dashboard / Uploads / Downloads screens are populated out of the box (mirrors
- * the design's sample data). Real records replace these as the user backs up.
+ * Debug-only sample data. On **debug** builds it seeds the local DB with
+ * representative records on first launch so the Dashboard / Uploads / Downloads
+ * screens are populated out of the box (mirrors the design's sample data).
+ *
+ * On **release** builds it is a no-op: the app starts empty and fills in with
+ * real records as the user uploads (Room) and opens Downloads (real remote list
+ * via [com.pepe.archivosync.domain.repository.TransferRepository.refreshDownloads]).
  */
 @Singleton
 class DemoSeeder @Inject constructor(
     private val dao: TransferDao,
 ) {
     suspend fun seedIfEmpty() {
+        // Never fabricate records in production builds.
+        if (!BuildConfig.DEBUG) return
         if (dao.downloadCount() > 0) return
 
         val dest = "api.midominio.com/upload"

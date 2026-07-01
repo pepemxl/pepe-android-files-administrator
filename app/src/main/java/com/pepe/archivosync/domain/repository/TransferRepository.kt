@@ -17,4 +17,7 @@ interface TransferRepository {
 
     suspend fun seedDownloads(items: List<DownloadItem>)
     suspend fun startDownload(id: String)
+
+    /** Replaces the Downloads list with the remote listing, keeping already-downloaded files. */
+    suspend fun refreshDownloads(): Result<Unit>
 }

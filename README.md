@@ -1,6 +1,6 @@
 # ArchivoSync — Android
 
-App Android (Kotlin moderno + Jetpack Compose) para **respaldar y compartir archivos** mediante varios mecanismos intercambiables: **API REST**, **almacenamiento en la nube** (S3 / FTP-SFTP / WebDAV / GCS) y **P2P** (estilo BitTorrent).
+App Android (Kotlin moderno + Jetpack Compose) para **respaldar y compartir archivos** mediante varios mecanismos intercambiables: **API REST**, **almacenamiento en la nube** (S3 / FTP-SFTP / WebDAV / GCS) y **P2P** (WebRTC real, con un dashboard estilo BitTorrent). Interopera con la app de escritorio hermana (`pepe-desktop-files-administrator`), que habla el mismo protocolo P2P.
 
 Forma parte de un sistema de tres repos:
 
@@ -27,11 +27,13 @@ domain/        Modelos puros + contratos (interfaces) + casos de uso
 data/          Implementaciones
   ├─ local/        Room (checkpointing por archivo)
   ├─ settings/     DataStore (preferencias + secretos)
-  ├─ remote/       Retrofit + OkHttp (subida con progreso por streaming)
+  ├─ remote/       Retrofit + OkHttp (subida/descarga con progreso por streaming)
   ├─ destination/  REST / Cloud / resolver  ← mecanismos enchufables
   ├─ source/       SAF (DocumentFile, scoped-storage)
-  └─ repository/   Transfer / P2P
-work/          WorkManager (BackupWorker en foreground service)
+  ├─ download/     DownloadStorage (destino en disco de las descargas)
+  ├─ webrtc/       Señalización (WebSocket) + DataChannel (WebRTC real)
+  └─ repository/   Transfer / P2P / P2pConnectivity
+work/          WorkManager (BackupWorker + DownloadWorker en foreground service)
 di/            Hilt (App, Database, Repository modules)
 ```
 
@@ -45,21 +47,22 @@ interface DestinationProvider {
     suspend fun test(settings): ConnectionResult
     suspend fun upload(settings, fileName, sizeBytes, input, onProgress): Result<String>
     suspend fun list(settings): Result<List<DownloadItem>>
+    suspend fun download(settings, item, sink, onProgress): Result<Unit>
 }
 ```
 
 `DestinationResolver` elige la implementación según `AppSettings.remoteType`. Añadir un mecanismo nuevo = una clase nueva + un caso en el resolver; **ni la UI ni el worker cambian**.
 
-- `RestDestinationProvider` — HTTP. Listado vía Retrofit; subida vía `ProgressRequestBody` (streaming por chunks de 64 KiB, sin OOM en archivos de 200 MB+).
-- `CloudDestinationProvider` — S3 / FTP-SFTP / WebDAV / GCS (transporte por proveedor enchufable).
-- **P2P** — `P2pRepository` / `P2pRepositoryImpl` modela el enjambre (seed/leech, ratio, magnet) y delega el intercambio de piezas al orquestador externo.
+- `RestDestinationProvider` — HTTP. Listado vía Retrofit; subida vía `ProgressRequestBody` y **descarga en streaming** (`GET /v1/files/{id}/content`), ambas por chunks de 64 KiB sin OOM en archivos de 200 MB+.
+- `CloudDestinationProvider` — S3 / GCS / WebDAV / FTP / SFTP **reales** (streaming, listado, descarga y test por proveedor). S3/GCS usan **SigV4 manual** (`data/destination/cloud/SigV4.kt`, GCS vía su endpoint de interoperabilidad S3) sobre OkHttp; WebDAV es HTTP puro (PROPFIND/PUT/GET); FTP usa commons-net y SFTP usa sshj (el esquema `sftp://` en el host selecciona SFTP).
+- **P2P** — WebRTC **real**: `P2pConnectivityRepository` (señalización + `WebRtcSessionManager`) abre un DataChannel por dispositivo y transfiere archivos; `P2pRepositoryImpl` proyecta la actividad real de ese canal al dashboard estilo BitTorrent (SEED = envíos, LEECH = recepciones, velocidad muestreada a 1 Hz). No es simulación.
 
-### Resiliencia (respaldo en segundo plano)
+### Resiliencia (transferencias en segundo plano)
 
-- **WorkManager + Foreground Service** (`BackupWorker`): sobrevive al cierre de la app.
-- **Checkpointing en Room**: cada archivo pasa `QUEUED → UPLOADING → DONE/FAILED`; al reanudar solo se procesa lo que no esté `DONE`.
+- **WorkManager + Foreground Service** (`BackupWorker` subidas, `DownloadWorker` descargas): sobreviven al cierre de la app.
+- **Checkpointing en Room**: cada subida pasa `QUEUED → UPLOADING → DONE/FAILED` y cada descarga `AVAILABLE → DOWNLOADING → DOWNLOADED`; al reanudar solo se procesa lo pendiente.
 - Progreso granular (~cada 5 %) y notificación de progreso.
-- Archivos bloqueados/en uso → se marcan `FAILED` y la copia continúa.
+- Archivos bloqueados/en uso → se marcan `FAILED` y la copia continúa. Las descargas guardan en el dir externo propio de la app (sin permisos en runtime) y registran su ruta local.
 
 ### Acceso a archivos
 
@@ -78,8 +81,8 @@ Kotlin 2.1 · Compose (BOM 2025.01) + Material 3 · Hilt · WorkManager · Room 
 - **Inicio** — estado de conexión, estadísticas, acciones rápidas, actividad reciente.
 - **Archivos** — pestañas interno/SD, breadcrumbs, selección múltiple → barra de acción **Subir** o **Sembrar (P2P)**.
 - **Subidas** — historial con filtros por estado, progreso y reintento.
-- **Descargas** — archivos remotos disponibles + progreso.
-- **P2P** — seed/leech, ratio, velocidades, magnet, pausar/reanudar.
+- **Descargas** — lista real del remoto (refresco al abrir), descarga en streaming con progreso y ruta de guardado.
+- **P2P** — estado de señalización, dispositivos vinculados (conectar), y transferencias reales por WebRTC (SEED/LEECH, velocidades).
 - **Ajustes** — REST vs Nube, prueba de conexión, toggles generales, apariencia.
 
 ---
