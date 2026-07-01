@@ -2,7 +2,6 @@ package com.pepe.archivosync.ui.screens.p2p
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,8 +19,6 @@ import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Lan
 import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
@@ -44,15 +41,12 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pepe.archivosync.core.Formatters
-import com.pepe.archivosync.domain.model.FileTransferState
 import com.pepe.archivosync.domain.model.P2pDevice
-import com.pepe.archivosync.domain.model.P2pFileTransfer
 import com.pepe.archivosync.domain.model.P2pMode
 import com.pepe.archivosync.domain.model.P2pStatus
 import com.pepe.archivosync.domain.model.P2pTransfer
 import com.pepe.archivosync.domain.model.PeerLink
 import com.pepe.archivosync.domain.model.SignalingState
-import com.pepe.archivosync.domain.model.TransferDirection
 import com.pepe.archivosync.ui.components.AppCard
 import com.pepe.archivosync.ui.components.AppToggle
 import com.pepe.archivosync.ui.components.CountFilterChip
@@ -61,7 +55,6 @@ import com.pepe.archivosync.ui.i18n.LocalStrings
 import com.pepe.archivosync.ui.theme.AppColors
 import com.pepe.archivosync.ui.theme.LocalAccent
 import com.pepe.archivosync.ui.theme.MonoFamily
-import java.util.Locale
 
 @Composable
 fun P2pScreen(viewModel: P2pViewModel = hiltViewModel()) {
@@ -112,8 +105,8 @@ fun P2pScreen(viewModel: P2pViewModel = hiltViewModel()) {
                     Row(Modifier.fillMaxWidth().padding(top = 13.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         MiniStat(Modifier.weight(1f), Formatters.speedKbps(ui.stats.totalUpKbps), "↑ ${s.p2pUp}", AppColors.Success)
                         MiniStat(Modifier.weight(1f), Formatters.speedKbps(ui.stats.totalDownKbps), "↓ ${s.p2pDown}", accent)
-                        MiniStat(Modifier.weight(1f), String.format(Locale.US, "%.2f", ui.stats.avgRatio), s.p2pRatio, AppColors.OnSurface)
-                        MiniStat(Modifier.weight(1f), ui.stats.totalPeers.toString(), s.p2pPeers, AppColors.OnSurface)
+                        MiniStat(Modifier.weight(1f), ui.stats.active.toString(), s.p2pActive, AppColors.OnSurface)
+                        MiniStat(Modifier.weight(1f), ui.stats.peers.toString(), s.p2pPeers, AppColors.OnSurface)
                     }
                 }
             }
@@ -136,7 +129,7 @@ fun P2pScreen(viewModel: P2pViewModel = hiltViewModel()) {
             }
         } else {
             items(ui.transfers, key = { it.id }) { p ->
-                P2pCard(p, ui.enabled, accent) { viewModel.togglePaused(p.id, p.status == P2pStatus.ACTIVE) }
+                P2pCard(p, ui.enabled, accent)
             }
         }
     }
@@ -197,11 +190,6 @@ private fun ConnectivityCard(
                 }
             }
 
-            if (conn.transfers.isNotEmpty()) {
-                HorizontalDivider(Modifier.padding(vertical = 10.dp), color = AppColors.SurfaceAlt)
-                Text(s.p2pDirectTransfers, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                conn.transfers.forEach { DirectTransferRow(it, accent) }
-            }
         }
     }
 }
@@ -241,29 +229,6 @@ private fun DeviceRow(
 }
 
 @Composable
-private fun DirectTransferRow(t: P2pFileTransfer, accent: Color) {
-    val s = LocalStrings.current
-    val incoming = t.direction == TransferDirection.INCOMING
-    val verb = if (incoming) s.p2pReceived else s.p2pSent
-    val color = when (t.state) {
-        FileTransferState.COMPLETED -> AppColors.Success
-        FileTransferState.FAILED -> AppColors.Error
-        else -> accent
-    }
-    Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(if (incoming) Icons.Filled.ArrowDownward else Icons.Filled.ArrowUpward, null, tint = color, modifier = Modifier.size(15.dp))
-        Column(Modifier.padding(start = 8.dp).weight(1f)) {
-            Text(t.name, fontSize = 13.sp, maxLines = 1)
-            Text(
-                "$verb · ${Formatters.bytes(t.transferredBytes)} / ${Formatters.bytes(t.sizeBytes)}",
-                color = AppColors.OnSurfaceFaint, fontSize = 11.sp, fontFamily = MonoFamily,
-            )
-        }
-        Text("${t.progress}%", color = color, fontFamily = MonoFamily, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-    }
-}
-
-@Composable
 private fun MiniStat(modifier: Modifier, value: String, label: String, valueColor: Color) {
     Surface(modifier = modifier, color = AppColors.SurfaceMuted, shape = RoundedCornerShape(9.dp), border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Outline)) {
         Column(Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -274,13 +239,18 @@ private fun MiniStat(modifier: Modifier, value: String, label: String, valueColo
 }
 
 @Composable
-private fun P2pCard(p: P2pTransfer, networkEnabled: Boolean, accent: Color, onToggle: () -> Unit) {
+private fun P2pCard(p: P2pTransfer, networkEnabled: Boolean, accent: Color) {
     val s = LocalStrings.current
     val kv = p.kind.visual()
     val isSeed = p.mode == P2pMode.SEED
-    val paused = p.status == P2pStatus.PAUSED
-    val active = networkEnabled && !paused
+    val running = p.status == P2pStatus.ACTIVE
+    val active = networkEnabled && running
     val modeColor = if (isSeed) AppColors.Success else accent
+    val (stateLabel, stateColor) = when (p.status) {
+        P2pStatus.ACTIVE -> (if (isSeed) s.p2pSeeding else s.p2pLeeching) to modeColor
+        P2pStatus.DONE -> s.p2pDone to AppColors.Success
+        P2pStatus.FAILED -> s.p2pFailed to AppColors.Error
+    }
     AppCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(13.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -296,28 +266,23 @@ private fun P2pCard(p: P2pTransfer, networkEnabled: Boolean, accent: Color, onTo
                     }
                 }
             }
-            if (!isSeed) {
-                Row(Modifier.fillMaxWidth().padding(top = 11.dp), verticalAlignment = Alignment.CenterVertically) {
-                    com.pepe.archivosync.ui.components.ThinProgressBar(p.progress, accent, Modifier.weight(1f))
-                    Text(Formatters.percent(p.progress), color = AppColors.OnSurfaceVariant, fontFamily = MonoFamily, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 10.dp))
-                }
+            Row(Modifier.fillMaxWidth().padding(top = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+                com.pepe.archivosync.ui.components.ThinProgressBar(p.progress, accent, Modifier.weight(1f))
+                Text(Formatters.percent(p.progress), color = AppColors.OnSurfaceVariant, fontFamily = MonoFamily, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 10.dp))
             }
             Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("↑ ${Formatters.speedKbps(if (active) p.upRateKbps else 0)}", color = AppColors.Success, fontFamily = MonoFamily, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                Text("↑ ${Formatters.speedKbps(if (active && isSeed) p.upRateKbps else 0)}", color = AppColors.Success, fontFamily = MonoFamily, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                 Text("↓ ${Formatters.speedKbps(if (active && !isSeed) p.downRateKbps else 0)}", color = accent, fontFamily = MonoFamily, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                Text("${s.p2pRatio} ${String.format(Locale.US, "%.2f", p.ratio)}", color = AppColors.OnSurfaceVariant, fontFamily = MonoFamily, fontSize = 11.sp)
+                Text(Formatters.bytes(p.transferredBytes), color = AppColors.OnSurfaceVariant, fontFamily = MonoFamily, fontSize = 11.sp)
             }
-            androidx.compose.material3.HorizontalDivider(Modifier.padding(top = 10.dp), color = AppColors.SurfaceAlt)
+            HorizontalDivider(Modifier.padding(top = 10.dp), color = AppColors.SurfaceAlt)
             Row(Modifier.fillMaxWidth().padding(top = 9.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Link, null, tint = AppColors.OnSurfaceFaint, modifier = Modifier.size(13.dp))
-                    Text(p.magnetUri, color = AppColors.OnSurfaceFaint, fontFamily = MonoFamily, fontSize = 10.sp, maxLines = 1, modifier = Modifier.padding(start = 3.dp))
+                    Icon(Icons.Filled.Devices, null, tint = AppColors.OnSurfaceFaint, modifier = Modifier.size(13.dp))
+                    Text(p.peerName, color = AppColors.OnSurfaceFaint, fontFamily = MonoFamily, fontSize = 10.sp, maxLines = 1, modifier = Modifier.padding(start = 4.dp))
                 }
-                Surface(color = AppColors.SurfaceAlt, shape = RoundedCornerShape(7.dp), modifier = Modifier.clickable(onClick = onToggle)) {
-                    Row(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause, null, tint = Color(0xFF475569), modifier = Modifier.size(16.dp))
-                        Text(if (paused) s.p2pResume else s.p2pPause, color = Color(0xFF475569), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 4.dp))
-                    }
+                Surface(color = stateColor.copy(alpha = 0.12f), shape = RoundedCornerShape(7.dp)) {
+                    Text(stateLabel, color = stateColor, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
                 }
             }
         }

@@ -26,8 +26,8 @@ import javax.inject.Inject
 data class P2pStats(
     val totalUpKbps: Long = 0,
     val totalDownKbps: Long = 0,
-    val avgRatio: Double = 0.0,
-    val totalPeers: Int = 0,
+    val active: Int = 0,
+    val peers: Int = 0,
 )
 
 data class P2pUiState(
@@ -60,7 +60,8 @@ class P2pViewModel @Inject constructor(
         repo.observeTransfers(),
         filter,
         settingsRepo.settings.map { it.p2pEnabled },
-    ) { transfers, f, enabled ->
+        connectivity.peers,
+    ) { transfers, f, enabled, peers ->
         val active = if (enabled) transfers.filter { it.status == P2pStatus.ACTIVE } else emptyList()
         P2pUiState(
             enabled = enabled,
@@ -72,10 +73,10 @@ class P2pViewModel @Inject constructor(
                 P2pMode.LEECH to transfers.count { it.mode == P2pMode.LEECH },
             ),
             stats = P2pStats(
-                totalUpKbps = active.sumOf { it.upRateKbps },
+                totalUpKbps = active.filter { it.mode == P2pMode.SEED }.sumOf { it.upRateKbps },
                 totalDownKbps = active.filter { it.mode == P2pMode.LEECH }.sumOf { it.downRateKbps },
-                avgRatio = if (transfers.isEmpty()) 0.0 else transfers.sumOf { it.ratio } / transfers.size,
-                totalPeers = active.sumOf { it.peers },
+                active = active.size,
+                peers = peers.count { it.channelOpen },
             ),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), P2pUiState())
@@ -93,10 +94,6 @@ class P2pViewModel @Inject constructor(
 
     fun toggleEnabled() = viewModelScope.launch {
         settingsRepo.update { it.copy(p2pEnabled = !it.p2pEnabled) }
-    }
-
-    fun togglePaused(id: String, paused: Boolean) = viewModelScope.launch {
-        repo.setPaused(id, paused)
     }
 
     // --- WebRTC connectivity ----------------------------------------------

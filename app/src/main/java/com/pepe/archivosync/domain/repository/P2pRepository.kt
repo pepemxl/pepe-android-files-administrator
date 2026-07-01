@@ -5,15 +5,13 @@ import com.pepe.archivosync.domain.model.P2pTransfer
 import kotlinx.coroutines.flow.Flow
 
 /**
- * Orchestrates BitTorrent-style transfers. The concrete client talks to the
- * external P2P orchestrator (pepe-p2p-orquestrator); here it is modelled as a
- * reactive store of [P2pTransfer]s plus seed/pause controls.
+ * Dashboard view over the real WebRTC P2P channel. Transfers are projected from
+ * the live DataChannel activity managed by [P2pConnectivityRepository]; seeding
+ * pushes files to every currently-linked peer.
  */
 interface P2pRepository {
     fun observeTransfers(): Flow<List<P2pTransfer>>
 
-    /** Begin seeding the given source files; returns the new transfers. */
+    /** Sends the given files to every currently-linked peer over WebRTC. */
     suspend fun seed(files: List<FileNode>)
-
-    suspend fun setPaused(id: String, paused: Boolean)
 }
