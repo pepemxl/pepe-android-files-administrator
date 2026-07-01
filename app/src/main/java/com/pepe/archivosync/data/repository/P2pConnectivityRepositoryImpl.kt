@@ -17,6 +17,7 @@ import com.pepe.archivosync.domain.model.SignalingState
 import com.pepe.archivosync.domain.repository.P2pConnectivityRepository
 import com.pepe.archivosync.domain.repository.SettingsRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -141,6 +142,9 @@ class P2pConnectivityRepositoryImpl @Inject constructor(
     }
 
     private fun queryFile(uri: Uri): Pair<String, Long> {
+        if (uri.scheme == "file") {
+            uri.path?.let(::File)?.let { return it.name to it.length() }
+        }
         var name = uri.lastPathSegment ?: "file"
         var size = 0L
         context.contentResolver.query(uri, null, null, null, null)?.use { c ->
