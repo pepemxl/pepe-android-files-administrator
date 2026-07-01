@@ -78,7 +78,7 @@ Kotlin 2.1 · Compose (BOM 2025.01) + Material 3 · Hilt · WorkManager · Room 
 
 6 pantallas con barra de navegación inferior, bilingüe **ES/EN** (toggle en la barra superior) y acentos de color (azul/teal/púrpura/naranja):
 
-- **Inicio** — estado de conexión, estadísticas, acciones rápidas, actividad reciente.
+- **Inicio** — estado de conexión, **perfiles de servidor** (crear / cambiar / editar / eliminar varios destinos REST o Nube; el activo alimenta la conexión), estadísticas, acciones rápidas y actividad reciente **real** (solo subidas reales).
 - **Archivos** — pestañas interno/SD, breadcrumbs, selección múltiple → barra de acción **Subir** o **Sembrar (P2P)**.
 - **Subidas** — historial con filtros por estado, progreso y reintento.
 - **Descargas** — lista real del remoto (refresco al abrir), descarga en streaming con progreso y ruta de guardado.

@@ -1,6 +1,7 @@
 package com.pepe.archivosync.data.settings
 
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -9,10 +10,15 @@ import com.pepe.archivosync.domain.model.AppLanguage
 import com.pepe.archivosync.domain.model.AppSettings
 import com.pepe.archivosync.domain.model.CloudProvider
 import com.pepe.archivosync.domain.model.RemoteType
+import com.pepe.archivosync.domain.model.ServerProfile
 import com.pepe.archivosync.domain.repository.SettingsRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -44,7 +50,11 @@ class SettingsRepositoryImpl @Inject constructor(
         val wifiOnly = booleanPreferencesKey("wifi_only")
         val compress = booleanPreferencesKey("compress")
         val notifications = booleanPreferencesKey("notifications")
+        val profiles = stringPreferencesKey("server_profiles")
+        val activeProfileId = stringPreferencesKey("active_profile_id")
     }
+
+    private val json = Json { ignoreUnknownKeys = true }
 
     override val settings: Flow<AppSettings> = dataStore.data.map { it.toSettings() }
 
@@ -74,12 +84,96 @@ class SettingsRepositoryImpl @Inject constructor(
             p[Keys.wifiOnly] = next.wifiOnly
             p[Keys.compress] = next.compress
             p[Keys.notifications] = next.notifications
+
+            // Keep the active profile's snapshot in sync with the live fields, so
+            // edits made in Settings land in the currently-selected profile.
+            val activeId = next.activeProfileId.ifBlank { next.profiles.firstOrNull()?.id ?: DEFAULT_ID }
+            val activeName = next.profiles.firstOrNull { it.id == activeId }?.name ?: DEFAULT_NAME
+            val active = next.toActiveProfile(activeId, activeName)
+            val list = if (next.profiles.any { it.id == activeId }) {
+                next.profiles.map { if (it.id == activeId) active else it }
+            } else {
+                next.profiles + active
+            }
+            p[Keys.profiles] = json.encodeToString(list)
+            p[Keys.activeProfileId] = activeId
         }
     }
 
+    override suspend fun saveProfile(profile: ServerProfile) {
+        val current = settings.first()
+        val id = profile.id.ifBlank { UUID.randomUUID().toString() }
+        val saved = profile.copy(id = id)
+        val list = if (current.profiles.any { it.id == id }) {
+            current.profiles.map { if (it.id == id) saved else it }
+        } else {
+            current.profiles + saved
+        }
+        dataStore.edit { p ->
+            writeDestination(p, saved)   // saving activates the profile
+            p[Keys.profiles] = json.encodeToString(list)
+            p[Keys.activeProfileId] = id
+        }
+    }
+
+    override suspend fun activateProfile(id: String) {
+        val current = settings.first()
+        val target = current.profiles.firstOrNull { it.id == id } ?: return
+        dataStore.edit { p ->
+            writeDestination(p, target)
+            p[Keys.activeProfileId] = id
+        }
+    }
+
+    override suspend fun deleteProfile(id: String) {
+        val current = settings.first()
+        if (current.profiles.size <= 1) return   // always keep at least one
+        val list = current.profiles.filterNot { it.id == id }
+        dataStore.edit { p ->
+            p[Keys.profiles] = json.encodeToString(list)
+            if (current.activeProfileId == id) {
+                val next = list.first()
+                writeDestination(p, next)
+                p[Keys.activeProfileId] = next.id
+            }
+        }
+    }
+
+    /** Mirror a profile's destination fields into the live connection keys. */
+    private fun writeDestination(p: MutablePreferences, s: ServerProfile) {
+        p[Keys.remoteType] = s.remoteType.name
+        p[Keys.baseUrl] = s.baseUrl
+        p[Keys.listEndpoint] = s.listEndpoint
+        p[Keys.uploadEndpoint] = s.uploadEndpoint
+        p[Keys.token] = s.token
+        p[Keys.cloudProvider] = s.cloudProvider.name
+        p[Keys.host] = s.host
+        p[Keys.accessKey] = s.accessKey
+        p[Keys.secretKey] = s.secretKey
+        p[Keys.region] = s.region
+        p[Keys.cloudPath] = s.cloudPath
+    }
+
+    /** Build a profile snapshot from the live destination fields. */
+    private fun AppSettings.toActiveProfile(id: String, name: String) = ServerProfile(
+        id = id,
+        name = name,
+        remoteType = remoteType,
+        baseUrl = baseUrl,
+        listEndpoint = listEndpoint,
+        uploadEndpoint = uploadEndpoint,
+        token = token,
+        cloudProvider = cloudProvider,
+        host = host,
+        accessKey = accessKey,
+        secretKey = secretKey,
+        region = region,
+        cloudPath = cloudPath,
+    )
+
     private fun Preferences.toSettings(): AppSettings {
         val defaults = AppSettings()
-        return AppSettings(
+        val base = AppSettings(
             language = this[Keys.language]?.let { runCatching { AppLanguage.valueOf(it) }.getOrNull() }
                 ?: defaults.language,
             accentName = this[Keys.accent] ?: defaults.accentName,
@@ -106,5 +200,20 @@ class SettingsRepositoryImpl @Inject constructor(
             compress = this[Keys.compress] ?: defaults.compress,
             notifications = this[Keys.notifications] ?: defaults.notifications,
         )
+
+        val stored = this[Keys.profiles]
+            ?.let { runCatching { json.decodeFromString<List<ServerProfile>>(it) }.getOrNull() }
+            ?: emptyList()
+        // No profiles yet (fresh install / migration): synthesize a "Default"
+        // one from the current live fields so the UI always shows one active row.
+        val profiles = stored.ifEmpty { listOf(base.toActiveProfile(DEFAULT_ID, DEFAULT_NAME)) }
+        val activeId = (this[Keys.activeProfileId] ?: "").ifBlank { profiles.first().id }
+
+        return base.copy(profiles = profiles, activeProfileId = activeId)
+    }
+
+    private companion object {
+        const val DEFAULT_ID = "default"
+        const val DEFAULT_NAME = "Default"
     }
 }

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pepe.archivosync.domain.model.AppLanguage
 import com.pepe.archivosync.domain.model.AppSettings
+import com.pepe.archivosync.domain.model.ServerProfile
 import com.pepe.archivosync.domain.repository.ConnectionResult
 import com.pepe.archivosync.domain.repository.SettingsRepository
 import com.pepe.archivosync.domain.usecase.TestConnectionUseCase
@@ -40,6 +41,18 @@ class AppViewModel @Inject constructor(
 
     fun update(transform: (AppSettings) -> AppSettings) = viewModelScope.launch {
         settingsRepo.update(transform)
+    }
+
+    fun saveProfile(profile: ServerProfile) = viewModelScope.launch {
+        settingsRepo.saveProfile(profile)
+    }
+
+    fun activateProfile(id: String) = viewModelScope.launch {
+        settingsRepo.activateProfile(id)
+    }
+
+    fun deleteProfile(id: String) = viewModelScope.launch {
+        settingsRepo.deleteProfile(id)
     }
 
     fun test() = viewModelScope.launch {

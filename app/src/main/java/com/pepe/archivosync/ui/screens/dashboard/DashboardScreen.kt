@@ -108,6 +108,11 @@ fun DashboardScreen(
             }
         }
 
+        // Server profiles (create / switch / edit / delete)
+        item {
+            ServersCard(settings, appViewModel, accent)
+        }
+
         // Stats grid (2x2)
         item {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -154,6 +159,14 @@ fun DashboardScreen(
                         Text(s.dashRecent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                         Text(s.dashViewAll, color = accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.clickable { onNavigate(Destination.Uploads) })
+                    }
+                    if (ui.recent.isEmpty()) {
+                        Text(
+                            s.dashNoRecent,
+                            color = AppColors.OnSurfaceFaint,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(top = 12.dp),
+                        )
                     }
                     ui.recent.forEach { item ->
                         val kv = item.kind.visual()

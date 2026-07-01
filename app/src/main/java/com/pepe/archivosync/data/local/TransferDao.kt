@@ -30,6 +30,10 @@ interface TransferDao {
     @Query("UPDATE uploads SET status = 'QUEUED', progress = 5, error = NULL, updatedAt = :now WHERE id = :id")
     suspend fun resetForRetry(id: String, now: Long)
 
+    /** Removes the legacy demo "recent activity" rows (real uploads use UUIDs). */
+    @Query("DELETE FROM uploads WHERE id IN ('u1','u2','u3','u4','u5')")
+    suspend fun deleteDemoUploads()
+
     // ---- downloads ----
     @Query("SELECT * FROM downloads ORDER BY name")
     fun observeDownloads(): Flow<List<DownloadEntity>>

@@ -1,10 +1,14 @@
 package com.pepe.archivosync.domain.model
 
+import kotlinx.serialization.Serializable
+
 enum class AppLanguage { ES, EN }
 
 /** Where backups go. Each value maps to a concrete DestinationProvider. */
+@Serializable
 enum class RemoteType { REST, CLOUD }
 
+@Serializable
 enum class CloudProvider { S3, FTP, WEBDAV, GCS }
 
 /**
@@ -31,6 +35,12 @@ data class AppSettings(
     val secretKey: String = "",
     val region: String = "us-east-1",   // S3/GCS signing region
     val cloudPath: String = "",          // key prefix / remote directory
+
+    // Saved server profiles. The destination fields above mirror the *active*
+    // profile; switching a profile rewrites them. Empty until first read
+    // synthesizes a "Default" profile from the current fields.
+    val profiles: List<ServerProfile> = emptyList(),
+    val activeProfileId: String = "",
 
     // P2P (WebRTC via the orchestrator: pepe-p2p-orquestrator)
     val p2pEnabled: Boolean = true,
