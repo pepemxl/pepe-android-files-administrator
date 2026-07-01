@@ -103,7 +103,14 @@ class SignalCodecTest {
     }
 
     @Test
-    fun `decodes error into failed`() {
+    fun `decodes error with top-level message (real server shape)`() {
+        // Matches SignalingHandler::send: {"type":"error","message":...} top level.
+        val event = codec.decode("""{"type":"error","message":"unauthorized"}""") as SignalEvent.Failed
+        assertEquals("unauthorized", event.message)
+    }
+
+    @Test
+    fun `decodes error with data-wrapped message (lenient fallback)`() {
         val event = codec.decode("""{"type":"error","data":{"message":"nope"}}""") as SignalEvent.Failed
         assertEquals("nope", event.message)
     }
