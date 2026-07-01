@@ -1,5 +1,7 @@
 package com.pepe.archivosync.ui.screens.p2p
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,15 +16,25 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Hub
+import androidx.compose.material.icons.filled.Lan
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Send
+import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -32,9 +44,15 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pepe.archivosync.core.Formatters
+import com.pepe.archivosync.domain.model.FileTransferState
+import com.pepe.archivosync.domain.model.P2pDevice
+import com.pepe.archivosync.domain.model.P2pFileTransfer
 import com.pepe.archivosync.domain.model.P2pMode
 import com.pepe.archivosync.domain.model.P2pStatus
 import com.pepe.archivosync.domain.model.P2pTransfer
+import com.pepe.archivosync.domain.model.PeerLink
+import com.pepe.archivosync.domain.model.SignalingState
+import com.pepe.archivosync.domain.model.TransferDirection
 import com.pepe.archivosync.ui.components.AppCard
 import com.pepe.archivosync.ui.components.AppToggle
 import com.pepe.archivosync.ui.components.CountFilterChip
@@ -50,13 +68,33 @@ fun P2pScreen(viewModel: P2pViewModel = hiltViewModel()) {
     val accent = LocalAccent.current
     val s = LocalStrings.current
     val ui by viewModel.state.collectAsStateWithLifecycle()
+    val conn by viewModel.connState.collectAsStateWithLifecycle()
 
     val filters = listOf(null to s.p2pAll, P2pMode.SEED to s.p2pSeeding, P2pMode.LEECH to s.p2pLeeching)
+
+    var sendTarget by remember { mutableStateOf<String?>(null) }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        val target = sendTarget
+        if (uri != null && target != null) viewModel.sendFile(target, uri)
+        sendTarget = null
+    }
 
     LazyColumn(
         Modifier.fillMaxWidth().padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        item {
+            ConnectivityCard(
+                conn = conn,
+                accent = accent,
+                onConnect = viewModel::connect,
+                onDisconnect = viewModel::disconnect,
+                onRefresh = viewModel::refreshDevices,
+                onLink = viewModel::linkPeer,
+                onSend = { deviceId -> sendTarget = deviceId; picker.launch("*/*") },
+            )
+        }
+
         // header card with toggle + aggregate stats
         item {
             AppCard(Modifier.fillMaxWidth()) {
@@ -101,6 +139,127 @@ fun P2pScreen(viewModel: P2pViewModel = hiltViewModel()) {
                 P2pCard(p, ui.enabled, accent) { viewModel.togglePaused(p.id, p.status == P2pStatus.ACTIVE) }
             }
         }
+    }
+}
+
+@Composable
+private fun ConnectivityCard(
+    conn: P2pConnUiState,
+    accent: Color,
+    onConnect: () -> Unit,
+    onDisconnect: () -> Unit,
+    onRefresh: () -> Unit,
+    onLink: (String) -> Unit,
+    onSend: (String) -> Unit,
+) {
+    val s = LocalStrings.current
+    val (stateLabel, stateColor) = when (conn.signaling) {
+        SignalingState.CONNECTED -> s.p2pStConnected to AppColors.Success
+        SignalingState.CONNECTING -> s.p2pStConnecting to accent
+        SignalingState.ERROR -> s.p2pStError to AppColors.Error
+        SignalingState.DISCONNECTED -> s.p2pStDisconnected to AppColors.OnSurfaceFaint
+    }
+    val active = conn.signaling == SignalingState.CONNECTED || conn.signaling == SignalingState.CONNECTING
+    AppCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Surface(color = accent.copy(alpha = 0.11f), shape = RoundedCornerShape(10.dp), modifier = Modifier.size(38.dp)) {
+                    Box(contentAlignment = Alignment.Center) { Icon(Icons.Filled.Lan, null, tint = accent, modifier = Modifier.size(21.dp)) }
+                }
+                Column(Modifier.padding(start = 11.dp).weight(1f)) {
+                    Text(s.p2pDirect, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text("${s.p2pSignaling}: $stateLabel", color = stateColor, fontSize = 12.sp, fontFamily = MonoFamily)
+                }
+                if (active) {
+                    OutlinedButton(onClick = onDisconnect) { Text(s.p2pDisconnect) }
+                } else {
+                    Button(onClick = onConnect) { Text(s.p2pConnect) }
+                }
+            }
+
+            Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.Devices, null, tint = AppColors.OnSurfaceFaint, modifier = Modifier.size(15.dp))
+                Text(s.p2pDevices, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 5.dp).weight(1f))
+                TextButton(onClick = onRefresh) { Text(s.p2pRefresh, fontSize = 12.sp) }
+            }
+
+            if (conn.devices.isEmpty()) {
+                Text(s.p2pNoDevices, color = AppColors.OnSurfaceFaint, fontSize = 12.sp, modifier = Modifier.padding(vertical = 6.dp))
+            } else {
+                conn.devices.forEach { device ->
+                    DeviceRow(
+                        device = device,
+                        link = conn.peers.firstOrNull { it.deviceId == device.id },
+                        accent = accent,
+                        onLink = { onLink(device.id) },
+                        onSend = { onSend(device.id) },
+                    )
+                }
+            }
+
+            if (conn.transfers.isNotEmpty()) {
+                HorizontalDivider(Modifier.padding(vertical = 10.dp), color = AppColors.SurfaceAlt)
+                Text(s.p2pDirectTransfers, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                conn.transfers.forEach { DirectTransferRow(it, accent) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeviceRow(
+    device: P2pDevice,
+    link: PeerLink?,
+    accent: Color,
+    onLink: () -> Unit,
+    onSend: () -> Unit,
+) {
+    val s = LocalStrings.current
+    val open = link?.channelOpen == true
+    Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(device.name.ifBlank { device.id }, fontSize = 13.sp, maxLines = 1)
+            Text(
+                if (open) s.p2pLinked else device.platform,
+                color = if (open) AppColors.Success else AppColors.OnSurfaceFaint,
+                fontSize = 11.sp,
+                fontFamily = MonoFamily,
+            )
+        }
+        if (open) {
+            Button(onClick = onSend, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
+                Icon(Icons.Filled.Send, null, modifier = Modifier.size(15.dp))
+                Text(s.p2pSend, fontSize = 12.sp, modifier = Modifier.padding(start = 5.dp))
+            }
+        } else {
+            OutlinedButton(onClick = onLink, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
+                Icon(Icons.Filled.Link, null, tint = accent, modifier = Modifier.size(15.dp))
+                Text(s.p2pLink, fontSize = 12.sp, modifier = Modifier.padding(start = 5.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun DirectTransferRow(t: P2pFileTransfer, accent: Color) {
+    val s = LocalStrings.current
+    val incoming = t.direction == TransferDirection.INCOMING
+    val verb = if (incoming) s.p2pReceived else s.p2pSent
+    val color = when (t.state) {
+        FileTransferState.COMPLETED -> AppColors.Success
+        FileTransferState.FAILED -> AppColors.Error
+        else -> accent
+    }
+    Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(if (incoming) Icons.Filled.ArrowDownward else Icons.Filled.ArrowUpward, null, tint = color, modifier = Modifier.size(15.dp))
+        Column(Modifier.padding(start = 8.dp).weight(1f)) {
+            Text(t.name, fontSize = 13.sp, maxLines = 1)
+            Text(
+                "$verb · ${Formatters.bytes(t.transferredBytes)} / ${Formatters.bytes(t.sizeBytes)}",
+                color = AppColors.OnSurfaceFaint, fontSize = 11.sp, fontFamily = MonoFamily,
+            )
+        }
+        Text("${t.progress}%", color = color, fontFamily = MonoFamily, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 

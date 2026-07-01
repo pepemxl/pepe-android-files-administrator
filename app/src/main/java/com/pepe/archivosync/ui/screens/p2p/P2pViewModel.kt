@@ -1,10 +1,16 @@
 package com.pepe.archivosync.ui.screens.p2p
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.pepe.archivosync.domain.model.P2pDevice
+import com.pepe.archivosync.domain.model.P2pFileTransfer
 import com.pepe.archivosync.domain.model.P2pMode
 import com.pepe.archivosync.domain.model.P2pStatus
 import com.pepe.archivosync.domain.model.P2pTransfer
+import com.pepe.archivosync.domain.model.PeerLink
+import com.pepe.archivosync.domain.model.SignalingState
+import com.pepe.archivosync.domain.repository.P2pConnectivityRepository
 import com.pepe.archivosync.domain.repository.P2pRepository
 import com.pepe.archivosync.domain.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -32,13 +38,23 @@ data class P2pUiState(
     val stats: P2pStats = P2pStats(),
 )
 
+/** Real WebRTC connectivity slice of the P2P screen. */
+data class P2pConnUiState(
+    val signaling: SignalingState = SignalingState.DISCONNECTED,
+    val devices: List<P2pDevice> = emptyList(),
+    val peers: List<PeerLink> = emptyList(),
+    val transfers: List<P2pFileTransfer> = emptyList(),
+)
+
 @HiltViewModel
 class P2pViewModel @Inject constructor(
     private val repo: P2pRepository,
+    private val connectivity: P2pConnectivityRepository,
     private val settingsRepo: SettingsRepository,
 ) : ViewModel() {
 
     private val filter = MutableStateFlow<P2pMode?>(null)
+    private val devices = MutableStateFlow<List<P2pDevice>>(emptyList())
 
     val state: StateFlow<P2pUiState> = combine(
         repo.observeTransfers(),
@@ -64,6 +80,15 @@ class P2pViewModel @Inject constructor(
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), P2pUiState())
 
+    val connState: StateFlow<P2pConnUiState> = combine(
+        connectivity.signalingState,
+        connectivity.peers,
+        connectivity.transfers,
+        devices,
+    ) { signaling, peers, transfers, devs ->
+        P2pConnUiState(signaling = signaling, devices = devs, peers = peers, transfers = transfers)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), P2pConnUiState())
+
     fun setFilter(mode: P2pMode?) { filter.value = mode }
 
     fun toggleEnabled() = viewModelScope.launch {
@@ -72,5 +97,26 @@ class P2pViewModel @Inject constructor(
 
     fun togglePaused(id: String, paused: Boolean) = viewModelScope.launch {
         repo.setPaused(id, paused)
+    }
+
+    // --- WebRTC connectivity ----------------------------------------------
+
+    fun connect() = viewModelScope.launch {
+        connectivity.connect()
+        refreshDevices()
+    }
+
+    fun disconnect() = connectivity.disconnect()
+
+    fun refreshDevices() = viewModelScope.launch {
+        connectivity.listDevices().getOrNull()?.let { devices.value = it }
+    }
+
+    fun linkPeer(deviceId: String) = viewModelScope.launch {
+        connectivity.connectToPeer(deviceId)
+    }
+
+    fun sendFile(deviceId: String, uri: Uri) = viewModelScope.launch {
+        connectivity.sendFile(deviceId, uri)
     }
 }

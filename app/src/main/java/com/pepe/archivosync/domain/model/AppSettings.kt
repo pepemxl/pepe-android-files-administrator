@@ -29,8 +29,16 @@ data class AppSettings(
     val accessKey: String = "",
     val secretKey: String = "",
 
-    // P2P
+    // P2P (WebRTC via the orchestrator: pepe-p2p-orquestrator)
     val p2pEnabled: Boolean = true,
+    /** Orchestrator HTTP base for control calls (ice-servers, devices, endpoints). */
+    val orchestratorUrl: String = "https://orquestador.midominio.com:9501/v1",
+    /** WebSocket signaling base; the client appends ?token=&device_id=. */
+    val signalingUrl: String = "wss://orquestador.midominio.com:9501",
+    /** This device's stable id at the orchestrator (assigned on first register). */
+    val deviceId: String = "",
+    /** Human label published when registering this device. */
+    val deviceName: String = "Android",
 
     // General toggles
     val autoUpload: Boolean = true,

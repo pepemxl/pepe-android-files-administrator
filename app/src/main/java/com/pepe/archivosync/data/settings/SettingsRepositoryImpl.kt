@@ -34,6 +34,10 @@ class SettingsRepositoryImpl @Inject constructor(
         val accessKey = stringPreferencesKey("access_key")
         val secretKey = stringPreferencesKey("secret_key")
         val p2pEnabled = booleanPreferencesKey("p2p_enabled")
+        val orchestratorUrl = stringPreferencesKey("orchestrator_url")
+        val signalingUrl = stringPreferencesKey("signaling_url")
+        val deviceId = stringPreferencesKey("device_id")
+        val deviceName = stringPreferencesKey("device_name")
         val autoUpload = booleanPreferencesKey("auto_upload")
         val wifiOnly = booleanPreferencesKey("wifi_only")
         val compress = booleanPreferencesKey("compress")
@@ -58,6 +62,10 @@ class SettingsRepositoryImpl @Inject constructor(
             p[Keys.accessKey] = next.accessKey
             p[Keys.secretKey] = next.secretKey
             p[Keys.p2pEnabled] = next.p2pEnabled
+            p[Keys.orchestratorUrl] = next.orchestratorUrl
+            p[Keys.signalingUrl] = next.signalingUrl
+            p[Keys.deviceId] = next.deviceId
+            p[Keys.deviceName] = next.deviceName
             p[Keys.autoUpload] = next.autoUpload
             p[Keys.wifiOnly] = next.wifiOnly
             p[Keys.compress] = next.compress
@@ -83,6 +91,10 @@ class SettingsRepositoryImpl @Inject constructor(
             accessKey = this[Keys.accessKey] ?: defaults.accessKey,
             secretKey = this[Keys.secretKey] ?: defaults.secretKey,
             p2pEnabled = this[Keys.p2pEnabled] ?: defaults.p2pEnabled,
+            orchestratorUrl = this[Keys.orchestratorUrl] ?: defaults.orchestratorUrl,
+            signalingUrl = this[Keys.signalingUrl] ?: defaults.signalingUrl,
+            deviceId = this[Keys.deviceId] ?: defaults.deviceId,
+            deviceName = this[Keys.deviceName] ?: defaults.deviceName,
             autoUpload = this[Keys.autoUpload] ?: defaults.autoUpload,
             wifiOnly = this[Keys.wifiOnly] ?: defaults.wifiOnly,
             compress = this[Keys.compress] ?: defaults.compress,

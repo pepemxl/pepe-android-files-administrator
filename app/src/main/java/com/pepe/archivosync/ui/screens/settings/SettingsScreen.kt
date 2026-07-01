@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.WifiTethering
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -103,6 +104,26 @@ fun SettingsScreen(appViewModel: AppViewModel) {
                         }
                     }
                     TestStatus(connStatus)
+                }
+            }
+        }
+
+        // P2P orchestrator card
+        item {
+            AppCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(14.dp)) {
+                    SectionHeader(Icons.Filled.Hub, s.setP2pSection, accent)
+                    Field(s.setOrchestratorUrl, settings.orchestratorUrl) { v -> appViewModel.update { it.copy(orchestratorUrl = v) } }
+                    Field(s.setSignalingUrl, settings.signalingUrl) { v -> appViewModel.update { it.copy(signalingUrl = v) } }
+                    Field(s.setDeviceName, settings.deviceName) { v -> appViewModel.update { it.copy(deviceName = v) } }
+                    if (settings.deviceId.isNotBlank()) {
+                        Text(
+                            "${s.setDeviceId}: ${settings.deviceId}",
+                            color = AppColors.OnSurfaceFaint, fontSize = 11.sp,
+                            fontFamily = com.pepe.archivosync.ui.theme.MonoFamily,
+                            modifier = Modifier.padding(top = 10.dp),
+                        )
+                    }
                 }
             }
         }

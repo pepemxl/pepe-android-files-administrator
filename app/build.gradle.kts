@@ -104,6 +104,9 @@ dependencies {
     // Image loading
     implementation(libs.coil.compose)
 
+    // WebRTC (P2P DataChannel transport via the orchestrator's signaling)
+    implementation(libs.stream.webrtc.android)
+
     // Test
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
