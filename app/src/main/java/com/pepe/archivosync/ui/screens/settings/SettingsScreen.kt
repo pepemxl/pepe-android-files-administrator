@@ -95,6 +95,10 @@ fun SettingsScreen(appViewModel: AppViewModel) {
                         if (settings.cloudProvider == CloudProvider.S3 || settings.cloudProvider == CloudProvider.GCS) {
                             Field(s.setRegion, settings.region) { v -> appViewModel.update { it.copy(region = v) } }
                         }
+                        if (settings.cloudProvider == CloudProvider.S3) {
+                            Field(s.setEndpoint, settings.endpoint) { v -> appViewModel.update { it.copy(endpoint = v) } }
+                            Text(s.setEndpointHint, color = AppColors.OnSurfaceFaint, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
+                        }
                         Field(s.setCloudPath, settings.cloudPath) { v -> appViewModel.update { it.copy(cloudPath = v) } }
                     }
 
@@ -119,6 +123,7 @@ fun SettingsScreen(appViewModel: AppViewModel) {
                     SectionHeader(Icons.Filled.Hub, s.setP2pSection, accent)
                     Field(s.setOrchestratorUrl, settings.orchestratorUrl) { v -> appViewModel.update { it.copy(orchestratorUrl = v) } }
                     Field(s.setSignalingUrl, settings.signalingUrl) { v -> appViewModel.update { it.copy(signalingUrl = v) } }
+                    SignalingModeRow(settings.signalingUrl, accent)
                     Field(s.setDeviceName, settings.deviceName) { v -> appViewModel.update { it.copy(deviceName = v) } }
                     if (settings.deviceId.isNotBlank()) {
                         Text(
@@ -215,6 +220,29 @@ private fun Field(label: String, value: String, onChange: (String) -> Unit) {
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
+    }
+}
+
+@Composable
+private fun SignalingModeRow(signalingUrl: String, accent: Color) {
+    val s = LocalStrings.current
+    val isWs = signalingUrl.trim().let { it.startsWith("ws://", true) || it.startsWith("wss://", true) }
+    Column(Modifier.padding(top = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("${s.setSigMode}:", color = AppColors.OnSurfaceVariant, fontSize = 12.sp)
+            Surface(
+                color = accent.copy(alpha = 0.11f),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.padding(start = 8.dp),
+            ) {
+                Text(
+                    if (isWs) s.setSigModeWs else s.setSigModePoll,
+                    color = accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                )
+            }
+        }
+        Text(s.setSigModeHint, color = AppColors.OnSurfaceFaint, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
     }
 }
 

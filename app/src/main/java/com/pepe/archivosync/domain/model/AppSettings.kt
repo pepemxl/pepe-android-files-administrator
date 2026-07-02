@@ -35,6 +35,7 @@ data class AppSettings(
     val secretKey: String = "",
     val region: String = "us-east-1",   // S3/GCS signing region
     val cloudPath: String = "",          // key prefix / remote directory
+    val endpoint: String = "",           // S3: custom endpoint (e.g. MinIO http://host:9250). Empty = AWS.
 
     // Saved server profiles. The destination fields above mirror the *active*
     // profile; switching a profile rewrites them. Empty until first read

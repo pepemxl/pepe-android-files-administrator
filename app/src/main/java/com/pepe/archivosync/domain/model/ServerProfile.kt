@@ -25,6 +25,7 @@ data class ServerProfile(
     val secretKey: String = "",
     val region: String = "us-east-1",
     val cloudPath: String = "",
+    val endpoint: String = "",
 ) {
     /** Short human label (host/URL) shown next to the profile name. */
     val label: String

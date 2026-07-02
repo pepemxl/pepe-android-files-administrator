@@ -41,6 +41,7 @@ class SettingsRepositoryImpl @Inject constructor(
         val secretKey = stringPreferencesKey("secret_key")
         val region = stringPreferencesKey("region")
         val cloudPath = stringPreferencesKey("cloud_path")
+        val endpoint = stringPreferencesKey("endpoint")
         val p2pEnabled = booleanPreferencesKey("p2p_enabled")
         val orchestratorUrl = stringPreferencesKey("orchestrator_url")
         val signalingUrl = stringPreferencesKey("signaling_url")
@@ -75,6 +76,7 @@ class SettingsRepositoryImpl @Inject constructor(
             p[Keys.secretKey] = next.secretKey
             p[Keys.region] = next.region
             p[Keys.cloudPath] = next.cloudPath
+            p[Keys.endpoint] = next.endpoint
             p[Keys.p2pEnabled] = next.p2pEnabled
             p[Keys.orchestratorUrl] = next.orchestratorUrl
             p[Keys.signalingUrl] = next.signalingUrl
@@ -152,6 +154,7 @@ class SettingsRepositoryImpl @Inject constructor(
         p[Keys.secretKey] = s.secretKey
         p[Keys.region] = s.region
         p[Keys.cloudPath] = s.cloudPath
+        p[Keys.endpoint] = s.endpoint
     }
 
     /** Build a profile snapshot from the live destination fields. */
@@ -169,6 +172,7 @@ class SettingsRepositoryImpl @Inject constructor(
         secretKey = secretKey,
         region = region,
         cloudPath = cloudPath,
+        endpoint = endpoint,
     )
 
     private fun Preferences.toSettings(): AppSettings {
@@ -190,6 +194,7 @@ class SettingsRepositoryImpl @Inject constructor(
             secretKey = this[Keys.secretKey] ?: defaults.secretKey,
             region = this[Keys.region] ?: defaults.region,
             cloudPath = this[Keys.cloudPath] ?: defaults.cloudPath,
+            endpoint = this[Keys.endpoint] ?: defaults.endpoint,
             p2pEnabled = this[Keys.p2pEnabled] ?: defaults.p2pEnabled,
             orchestratorUrl = this[Keys.orchestratorUrl] ?: defaults.orchestratorUrl,
             signalingUrl = this[Keys.signalingUrl] ?: defaults.signalingUrl,

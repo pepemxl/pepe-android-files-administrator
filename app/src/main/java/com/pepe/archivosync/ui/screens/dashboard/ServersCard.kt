@@ -149,6 +149,7 @@ private fun ServerFormDialog(
     var secretKey by remember { mutableStateOf(base.secretKey) }
     var region by remember { mutableStateOf(base.region) }
     var cloudPath by remember { mutableStateOf(base.cloudPath) }
+    var endpoint by remember { mutableStateOf(base.endpoint) }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(shape = RoundedCornerShape(14.dp), color = AppColors.Surface) {
@@ -183,6 +184,9 @@ private fun ServerFormDialog(
                     if (provider == CloudProvider.S3 || provider == CloudProvider.GCS) {
                         FormField(s.setRegion, region) { region = it }
                     }
+                    if (provider == CloudProvider.S3) {
+                        FormField(s.setEndpoint, endpoint) { endpoint = it }
+                    }
                     FormField(s.setCloudPath, cloudPath) { cloudPath = it }
                 }
 
@@ -195,7 +199,7 @@ private fun ServerFormDialog(
                                 remoteType = if (isRest) RemoteType.REST else RemoteType.CLOUD,
                                 baseUrl = baseUrl, listEndpoint = listEp, uploadEndpoint = uploadEp, token = token,
                                 cloudProvider = provider, host = host, accessKey = accessKey, secretKey = secretKey,
-                                region = region, cloudPath = cloudPath,
+                                region = region, cloudPath = cloudPath, endpoint = endpoint,
                             ),
                         )
                     }) {

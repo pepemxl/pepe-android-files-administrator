@@ -23,15 +23,34 @@ import java.util.TimeZone
  */
 class S3Client(private val client: OkHttpClient) {
 
-    private data class Target(val host: String, val basePath: String)
+    // `scheme` is "https" except for a plain-HTTP custom endpoint (e.g. MinIO).
+    // `host` is host[:port], used both in the URL and as the signed host header.
+    private data class Target(val scheme: String, val host: String, val basePath: String)
 
     private fun target(s: AppSettings): Target {
         val bucket = s.host.trim().trim('/')
-        return if (s.cloudProvider.name.equals("GCS", true)) {
-            Target("storage.googleapis.com", "/" + SigV4.uriEncode(bucket, false))
-        } else {
-            Target("$bucket.s3.${s.region.trim()}.amazonaws.com", "")
+        val endpoint = s.endpoint.trim().trimEnd('/')
+        return when {
+            endpoint.isNotEmpty() -> {
+                // Custom endpoint (MinIO / other S3-compatible): path-style, scheme
+                // and host[:port] taken from the endpoint URL.
+                val (scheme, host) = splitEndpoint(endpoint)
+                Target(scheme, host, "/" + SigV4.uriEncode(bucket, false))
+            }
+            s.cloudProvider.name.equals("GCS", true) ->
+                Target("https", "storage.googleapis.com", "/" + SigV4.uriEncode(bucket, false))
+            else ->
+                Target("https", "$bucket.s3.${s.region.trim()}.amazonaws.com", "")
         }
+    }
+
+    /** Split an endpoint URL into (scheme, host[:port]); default scheme https. */
+    private fun splitEndpoint(endpoint: String): Pair<String, String> {
+        val idx = endpoint.indexOf("://")
+        val scheme = if (idx >= 0) endpoint.substring(0, idx).lowercase() else "https"
+        val rest = if (idx >= 0) endpoint.substring(idx + 3) else endpoint
+        val host = rest.substringBefore('/').substringBefore('?')
+        return scheme to host
     }
 
     private fun dates(): Pair<String, String> {
@@ -65,7 +84,7 @@ class S3Client(private val client: OkHttpClient) {
         val t = target(s)
         val q = canonQuery(listOf("list-type" to "2", "max-keys" to "1"))
         val listPath = t.basePath.ifEmpty { "/" }
-        signedGet("https://${t.host}$listPath?$q", t.host, listPath, q, s).use { return it.isSuccessful }
+        signedGet("${t.scheme}://${t.host}$listPath?$q", t.host, listPath, q, s).use { return it.isSuccessful }
     }
 
     fun list(s: AppSettings): List<DownloadItem> {
@@ -77,7 +96,7 @@ class S3Client(private val client: OkHttpClient) {
         }
         val q = canonQuery(pairs)
         val listPath = t.basePath.ifEmpty { "/" }
-        signedGet("https://${t.host}$listPath?$q", t.host, listPath, q, s).use { resp ->
+        signedGet("${t.scheme}://${t.host}$listPath?$q", t.host, listPath, q, s).use { resp ->
             check(resp.isSuccessful) { "HTTP ${resp.code}" }
             return parseListXml(resp.body!!.byteStream())
         }
@@ -87,7 +106,7 @@ class S3Client(private val client: OkHttpClient) {
         val t = target(s)
         val key = CloudIo.joinRemote(s.cloudPath, fileName)
         val canonicalUri = "${t.basePath}/${SigV4.uriEncode(key, false)}"
-        val url = "https://${t.host}$canonicalUri"
+        val url = "${t.scheme}://${t.host}$canonicalUri"
         val (amzDate, dateStamp) = dates()
         val auth = SigV4.authorization(
             "PUT", canonicalUri, "",
@@ -110,7 +129,7 @@ class S3Client(private val client: OkHttpClient) {
         val t = target(s)
         val key = (item.remotePath ?: item.id).trimStart('/')
         val canonicalUri = "${t.basePath}/${SigV4.uriEncode(key, false)}"
-        signedGet("https://${t.host}$canonicalUri", t.host, canonicalUri, "", s).use { resp ->
+        signedGet("${t.scheme}://${t.host}$canonicalUri", t.host, canonicalUri, "", s).use { resp ->
             check(resp.isSuccessful) { "HTTP ${resp.code}" }
             CloudIo.copy(resp.body!!.byteStream(), sink, onProgress)
         }
