@@ -26,7 +26,7 @@ domain/        Modelos puros + contratos (interfaces) + casos de uso
   └─ usecase/      BackupSelectionUseCase, TestConnectionUseCase, SeedSelectionUseCase
 data/          Implementaciones
   ├─ local/        Room (checkpointing por archivo)
-  ├─ settings/     DataStore (preferencias + secretos)
+  ├─ settings/     DataStore (preferencias) + secretos cifrados (Keystore AES-GCM)
   ├─ remote/       Retrofit + OkHttp (subida/descarga con progreso por streaming)
   ├─ destination/  REST / Cloud / resolver  ← mecanismos enchufables
   ├─ source/       SAF (DocumentFile, scoped-storage)
@@ -107,10 +107,15 @@ Requiere Android SDK (platform 35) y JDK 17.
 
 - **REST**: URL base, endpoint de listado (GET), endpoint de subida (POST), token.
 - **Nube**: proveedor, host/bucket, access key, secret key.
-- Los secretos viven en DataStore y se excluyen de los backups del sistema (`data_extraction_rules.xml`).
+- Los secretos se **cifran en reposo** (ver Notas de seguridad) y se excluyen de los backups del sistema (`data_extraction_rules.xml`).
 
 ## Notas de seguridad
 
+Endurecimientos aplicados (detalle en [`docs/seguridad.md`](../docs/seguridad.md) / [`docs/plan_seguridad.md`](../docs/plan_seguridad.md)):
+
+- **Verificación de host key SFTP (H-1):** `PinningHostKeyVerifier` (TOFU) fija la huella SHA-256 del servidor en la primera conexión (archivo `sftp_known_hosts` privado de la app) y **rechaza** una clave distinta después — cierra el MITM que permitía el antiguo `PromiscuousVerifier`.
+- **Secretos cifrados en reposo (H-2):** `token`, `accessKey`, `secretKey` y el blob de perfiles se cifran con **AES-256-GCM** usando una clave del **Android Keystore** (`KeystoreSecretCipher`), no en texto plano en DataStore. Migración transparente de valores antiguos.
+- **Token de señalización en cabecera (H-3):** el WebSocket manda el token en `Authorization`, no en la URL. El modo *polling* ya lo hacía.
 - Sin TLS no hay subida segura: usa HTTPS / SFTP / WebDAV-S.
 - No se registran rutas completas ni contenido en Logcat.
 - Permisos mínimos: `INTERNET`, `POST_NOTIFICATIONS`, `FOREGROUND_SERVICE(_DATA_SYNC)`, `WAKE_LOCK`.
