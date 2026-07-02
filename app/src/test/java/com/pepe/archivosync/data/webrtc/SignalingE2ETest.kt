@@ -92,8 +92,8 @@ class SignalingE2ETest {
         val idB = registerDevice(token, "e2e-B")
 
         val scope = CoroutineScope(Dispatchers.IO)
-        val clientA = SignalingClient(http, codec)
-        val clientB = SignalingClient(http, codec)
+        val clientA = SignalingClient(http, codec, json)
+        val clientB = SignalingClient(http, codec, json)
         val eventsA = record(scope, clientA)
         val eventsB = record(scope, clientB)
 
@@ -137,7 +137,7 @@ class SignalingE2ETest {
     @Test
     fun `rejects a bad token on the signaling socket`() = runBlocking {
         val scope = CoroutineScope(Dispatchers.IO)
-        val client = SignalingClient(http, codec)
+        val client = SignalingClient(http, codec, json)
         val events = record(scope, client)
         try {
             delay(200)

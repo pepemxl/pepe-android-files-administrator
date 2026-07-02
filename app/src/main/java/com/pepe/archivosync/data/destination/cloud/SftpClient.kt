@@ -7,7 +7,7 @@ import com.pepe.archivosync.domain.model.FileKind
 import net.schmizz.sshj.SSHClient
 import net.schmizz.sshj.sftp.OpenMode
 import net.schmizz.sshj.sftp.SFTPClient
-import net.schmizz.sshj.transport.verification.PromiscuousVerifier
+import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.EnumSet
@@ -16,14 +16,15 @@ import java.util.EnumSet
  * SFTP backend via sshj (blocking; call off the main thread). Used when the
  * cloud provider is "FTP" and the host is `sftp://…`.
  *
- * NOTE: the host key is accepted without verification (PromiscuousVerifier).
- * Fine for trusted LAN/dev targets; a production build should pin/verify it.
+ * The host key is verified trust-on-first-use against [knownHostsFile] via
+ * [PinningHostKeyVerifier]: unseen hosts are pinned, a changed key aborts the
+ * connection (possible MITM). See docs/seguridad.md H-1.
  */
-class SftpClient {
+class SftpClient(private val knownHostsFile: File) {
 
     private inline fun <T> withSftp(s: AppSettings, block: (SFTPClient) -> T): T {
         val ssh = SSHClient()
-        ssh.addHostKeyVerifier(PromiscuousVerifier())
+        ssh.addHostKeyVerifier(PinningHostKeyVerifier(knownHostsFile))
         val (host, port) = CloudIo.hostPort(s.host, 22)
         ssh.connect(host, port)
         try {

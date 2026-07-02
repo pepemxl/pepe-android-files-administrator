@@ -25,6 +25,7 @@ import javax.inject.Singleton
 @Singleton
 class SettingsRepositoryImpl @Inject constructor(
     private val dataStore: DataStore<Preferences>,
+    private val cipher: KeystoreSecretCipher,
 ) : SettingsRepository {
 
     private object Keys {
@@ -69,11 +70,11 @@ class SettingsRepositoryImpl @Inject constructor(
             p[Keys.baseUrl] = next.baseUrl
             p[Keys.listEndpoint] = next.listEndpoint
             p[Keys.uploadEndpoint] = next.uploadEndpoint
-            p[Keys.token] = next.token
+            p[Keys.token] = cipher.encrypt(next.token)
             p[Keys.cloudProvider] = next.cloudProvider.name
             p[Keys.host] = next.host
-            p[Keys.accessKey] = next.accessKey
-            p[Keys.secretKey] = next.secretKey
+            p[Keys.accessKey] = cipher.encrypt(next.accessKey)
+            p[Keys.secretKey] = cipher.encrypt(next.secretKey)
             p[Keys.region] = next.region
             p[Keys.cloudPath] = next.cloudPath
             p[Keys.endpoint] = next.endpoint
@@ -97,7 +98,7 @@ class SettingsRepositoryImpl @Inject constructor(
             } else {
                 next.profiles + active
             }
-            p[Keys.profiles] = json.encodeToString(list)
+            p[Keys.profiles] = cipher.encrypt(json.encodeToString(list))
             p[Keys.activeProfileId] = activeId
         }
     }
@@ -113,7 +114,7 @@ class SettingsRepositoryImpl @Inject constructor(
         }
         dataStore.edit { p ->
             writeDestination(p, saved)   // saving activates the profile
-            p[Keys.profiles] = json.encodeToString(list)
+            p[Keys.profiles] = cipher.encrypt(json.encodeToString(list))
             p[Keys.activeProfileId] = id
         }
     }
@@ -132,7 +133,7 @@ class SettingsRepositoryImpl @Inject constructor(
         if (current.profiles.size <= 1) return   // always keep at least one
         val list = current.profiles.filterNot { it.id == id }
         dataStore.edit { p ->
-            p[Keys.profiles] = json.encodeToString(list)
+            p[Keys.profiles] = cipher.encrypt(json.encodeToString(list))
             if (current.activeProfileId == id) {
                 val next = list.first()
                 writeDestination(p, next)
@@ -147,11 +148,11 @@ class SettingsRepositoryImpl @Inject constructor(
         p[Keys.baseUrl] = s.baseUrl
         p[Keys.listEndpoint] = s.listEndpoint
         p[Keys.uploadEndpoint] = s.uploadEndpoint
-        p[Keys.token] = s.token
+        p[Keys.token] = cipher.encrypt(s.token)
         p[Keys.cloudProvider] = s.cloudProvider.name
         p[Keys.host] = s.host
-        p[Keys.accessKey] = s.accessKey
-        p[Keys.secretKey] = s.secretKey
+        p[Keys.accessKey] = cipher.encrypt(s.accessKey)
+        p[Keys.secretKey] = cipher.encrypt(s.secretKey)
         p[Keys.region] = s.region
         p[Keys.cloudPath] = s.cloudPath
         p[Keys.endpoint] = s.endpoint
@@ -186,12 +187,12 @@ class SettingsRepositoryImpl @Inject constructor(
             baseUrl = this[Keys.baseUrl] ?: defaults.baseUrl,
             listEndpoint = this[Keys.listEndpoint] ?: defaults.listEndpoint,
             uploadEndpoint = this[Keys.uploadEndpoint] ?: defaults.uploadEndpoint,
-            token = this[Keys.token] ?: defaults.token,
+            token = this[Keys.token]?.let { cipher.decrypt(it) } ?: defaults.token,
             cloudProvider = this[Keys.cloudProvider]?.let { runCatching { CloudProvider.valueOf(it) }.getOrNull() }
                 ?: defaults.cloudProvider,
             host = this[Keys.host] ?: defaults.host,
-            accessKey = this[Keys.accessKey] ?: defaults.accessKey,
-            secretKey = this[Keys.secretKey] ?: defaults.secretKey,
+            accessKey = this[Keys.accessKey]?.let { cipher.decrypt(it) } ?: defaults.accessKey,
+            secretKey = this[Keys.secretKey]?.let { cipher.decrypt(it) } ?: defaults.secretKey,
             region = this[Keys.region] ?: defaults.region,
             cloudPath = this[Keys.cloudPath] ?: defaults.cloudPath,
             endpoint = this[Keys.endpoint] ?: defaults.endpoint,
@@ -207,6 +208,7 @@ class SettingsRepositoryImpl @Inject constructor(
         )
 
         val stored = this[Keys.profiles]
+            ?.let { cipher.decrypt(it) }
             ?.let { runCatching { json.decodeFromString<List<ServerProfile>>(it) }.getOrNull() }
             ?: emptyList()
         // No profiles yet (fresh install / migration): synthesize a "Default"
